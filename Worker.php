@@ -53,7 +53,6 @@ class Worker
     {
 
         echo "触发！！\n";
-
         switch($signal)
         {
             case SIGINT:
