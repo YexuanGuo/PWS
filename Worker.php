@@ -24,13 +24,14 @@ class Worker
 
     public function run()
     {
-        //MasterId
-        self::$_master_id = posix_getpid();
+        //获取主进程ID
+        self::$_master_pid = posix_getpid();
+        //设置主进程名称
+        self::set_process_title(sprintf('PWS Master [%s]',self::$_master_pid));
         //安装信号
         self::install_signal();
         //创建监听套接字
         self::create_sockets_listen();
-        setproctitle("PHPServer:master process id:".self::$_master_id);
 
         for($i=1;$i<=self::$_worker_count;$i++)
         {
@@ -39,7 +40,6 @@ class Worker
 
         $this->monitor_workers();
     }
-
     //安装相关信号
     protected function install_signal()
     {
@@ -48,16 +48,17 @@ class Worker
         //status
         pcntl_signal(SIGUSR2,array($this,'signal_handler'),false);
     }
-
+    //信号处理函数
     protected function signal_handler($signal)
     {
 
-        echo "触发！！\n";
         switch($signal)
         {
+            //Ctrl+C
             case SIGINT:
                 echo "stop signal!";
                 break;
+            //Status
             case SIGUSR2:
                 echo "worker status";
                 break;
@@ -65,7 +66,7 @@ class Worker
     }
 
 
-    public function fork_one_worker($worker_name)
+    protected function fork_one_worker($worker_name)
     {
         // 触发alarm信号处理
         pcntl_signal_dispatch();
@@ -84,10 +85,10 @@ class Worker
             pcntl_signal(SIGALRM, SIG_IGN);
             pcntl_signal_dispatch();
             //给进程设置一个名字
-            setproctitle("PHPServer:worker process pid:".self::$_master_id);
+            self::set_process_title(sprintf('PWS Worker [%s]',self::$_master_pid));
             //当前workerID
             $this->worker_pid = posix_getpid();
-            //初始化进程ID为0,以便于统计请求次数
+            //初始化进程ID为0,以便于统计任务处理次数
             self::$_statis_info[getmypid()] = 0;
             //进程开始任务
             $this->serve();
@@ -121,7 +122,7 @@ class Worker
                 file_put_contents('task_count.log',getmypid().'====>'.self::$_statis_info[getmypid()].PHP_EOL,FILE_APPEND);
                 $_SERVER = array();
                 $this->decode(fgets($conn));
-                fwrite($conn,$this->encode(phpinfo()));
+                fwrite($conn,$this->encode(print_R($_SERVER)));
                 fclose($conn);
             }
         }
@@ -149,8 +150,7 @@ class Worker
         while(true)
         {
             //如果有信号进来，尝试触发信号处理函数
-            //pcntl_signal_dispatch();
-            //$status = 0;
+            pcntl_signal_dispatch();
             $pid = pcntl_wait($status, WUNTRACED | WNOHANG);
             //$pid = pcntl_waitpid(-1, $status, WUNTRACED | WNOHANG);
             if($pid > 0)
@@ -166,6 +166,27 @@ class Worker
                 //worker进程接收到master信号退出会到这里来
                 echo "Master Stop! Worker pid : {$pid} exit! Status:{$status}\n";
                 exit(0);
+            }
+        }
+    }
+
+    /**
+     * @param $title
+     * 设置进程名称
+     */
+    protected function set_process_title($title)
+    {
+        if (!empty($title))
+        {
+            // 需要扩展
+            if(extension_loaded('proctitle') && function_exists('setproctitle'))
+            {
+                @setproctitle($title);
+            }
+            // >=php 5.5
+            elseif (function_exists('cli_set_process_title'))
+            {
+                cli_set_process_title($title);
             }
         }
     }
