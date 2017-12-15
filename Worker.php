@@ -12,7 +12,7 @@ class Worker
     //worker进程数
     protected static $_worker_count = 3;
     //Master进程ID
-    protected static $_master_id;
+    protected static $_master_pid;
     //Worker进程
     protected static $_worker_pids = array();
     //统计信息
@@ -22,22 +22,28 @@ class Worker
     //监听列表
     protected static $_socketList = array();
 
-    public function run()
+
+    public function __construct()
     {
         //获取主进程ID
         self::$_master_pid = posix_getpid();
         //设置主进程名称
-        self::set_process_title(sprintf('PWS Master [%s]',self::$_master_pid));
+        self::set_process_title(sprintf('PWS Master Process [%s]',self::$_master_pid));
+    }
+
+
+    public function run()
+    {
         //安装信号
         self::install_signal();
         //创建监听套接字
         self::create_sockets_listen();
-
+        //fork一些worker执行任务
         for($i=1;$i<=self::$_worker_count;$i++)
         {
             $this->fork_one_worker($i);
         }
-
+        //监控worker
         $this->monitor_workers();
     }
     //安装相关信号
@@ -56,7 +62,8 @@ class Worker
         {
             //Ctrl+C
             case SIGINT:
-                echo "stop signal!";
+                echo "stop signal!"."\n";
+                $this->stop_all_worker();
                 break;
             //Status
             case SIGUSR2:
@@ -85,7 +92,7 @@ class Worker
             pcntl_signal(SIGALRM, SIG_IGN);
             pcntl_signal_dispatch();
             //给进程设置一个名字
-            self::set_process_title(sprintf('PWS Worker [%s]',self::$_master_pid));
+            self::set_process_title(sprintf('PWS Worker Process [%s]',self::$_master_pid));
             //当前workerID
             $this->worker_pid = posix_getpid();
             //初始化进程ID为0,以便于统计任务处理次数
@@ -167,6 +174,26 @@ class Worker
                 echo "Master Stop! Worker pid : {$pid} exit! Status:{$status}\n";
                 exit(0);
             }
+        }
+    }
+
+    /**
+     * 强制停止所有worker
+     */
+    public function stop_all_worker()
+    {
+        if(self::$_master_pid === posix_getpid())
+        {
+            //循环停止所有Worker
+            foreach (self::$_worker_pids as $_worker_id)
+            {
+                //循环发送worker终止信号
+                posix_kill($_worker_id,SIGINT);
+            }
+        }
+        else
+        {
+            exit(0);
         }
     }
 
