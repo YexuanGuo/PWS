@@ -47,14 +47,6 @@ class Worker
         $this->monitor_workers();
     }
 
-    //脱离终端成为deamon进程
-    public function deamon()
-    {
-        //设置umask
-        umask(0);
-
-    }
-
 
     //安装相关信号
     protected function install_signal()
