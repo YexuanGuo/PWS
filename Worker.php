@@ -56,8 +56,6 @@ class Worker
     }
 
 
-
-
     //安装相关信号
     protected function install_signal()
     {
@@ -200,7 +198,7 @@ class Worker
             foreach (self::$_worker_pids as $_worker_id)
             {
                 //循环发送worker终止信号
-                posix_kill($_worker_id,SIGINT);
+                posix_kill($_worker_id,SIGKILL);
             }
         }
         else
